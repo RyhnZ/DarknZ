@@ -33,8 +33,8 @@ The Support group can be reached out to at [Eagle Union](https://t.me/YorktownEa
 
 # How to setup
 
-- `git clone https://github.com/Dank-del/EnterpriseALRobot`
-- `cd EnterpriseALRobot`
+- `git clone https://github.com/RyhnZ/DarknZ`
+- `cd DarknZ`
 - `cp sample_config.ini config.ini`
 - *Fill in all the vars*
 - `pip3 install -U -r requirements.txt`
