@@ -51,9 +51,10 @@ CURRENT_WARNING_FILTER_STRING = "<b>Current warning filters in this chat:</b>\n"
 
 # Not async
 def warn(
-    user: User, chat: Chat, reason: str, message: Message, warner: User = None
-) -> str:  # sourcery no-metrics
-    if is_user_admin(chat, user.id):
+        user: User, update: Update, reason: str, message: Message, warner: User = None
+) -> Optional[str]:  # sourcery no-metrics
+    chat = update.effective_chat
+    if is_user_admin(update, user.id):
         # message.reply_text("Damn admins, They are too far to be kicked!")
         return
 
@@ -71,7 +72,8 @@ def warn(
             message.reply_text("Whitelisted users are warn immune.")
         else:
             message.reply_text(
-                "Neptunian triggered an auto warn filter!\nI can't warn Neptunians users but they should avoid abusing this."
+                "Neptunian triggered an auto warn filter!\nI can't warn Neptunians users but they should avoid "
+                "abusing this. "
             )
         return
 
@@ -93,7 +95,7 @@ def warn(
             )
 
         else:  # ban
-            chat.kick_member(user.id)
+            chat.ban_member(user.id)
             reply = (
                 f"<code>❕</code><b>Ban Event</b>\n"
                 f"<code> </code><b>•  User:</b> {mention_html(user.id, user.first_name)}\n"
@@ -110,6 +112,7 @@ def warn(
             f"#WARN_BAN\n"
             f"<b>Admin:</b> {warner_tag}\n"
             f"<b>User:</b> {mention_html(user.id, user.first_name)}\n"
+            f"<b>User ID:</b> <code>{user.id}</code>\n"
             f"<b>Reason:</b> {reason}\n"
             f"<b>Counts:</b> <code>{num_warns}/{limit}</code>"
         )
@@ -138,6 +141,7 @@ def warn(
             f"#WARN\n"
             f"<b>Admin:</b> {warner_tag}\n"
             f"<b>User:</b> {mention_html(user.id, user.first_name)}\n"
+            f"<b>User ID:</b> <code>{user.id}</code>\n"
             f"<b>Reason:</b> {reason}\n"
             f"<b>Counts:</b> <code>{num_warns}/{limit}</code>"
         )
@@ -176,7 +180,9 @@ def button(update: Update, context: CallbackContext) -> str:
                 f"<b>{html.escape(chat.title)}:</b>\n"
                 f"#UNWARN\n"
                 f"<b>Admin:</b> {mention_html(user.id, user.first_name)}\n"
-                f"<b>User:</b> {mention_html(user_member.user.id, user_member.user.first_name)}"
+                f"<b>User:</b> {mention_html(user_member.user.id, user_member.user.first_name)}\n"
+                f"<b>User ID:</b> <code>{user_member.user.id}</code>"
+                
             )
         else:
             update.effective_message.edit_text(
@@ -199,18 +205,18 @@ def warn_user(update: Update, context: CallbackContext) -> str:
 
     if user_id:
         if (
-            message.reply_to_message
-            and message.reply_to_message.from_user.id == user_id
+                message.reply_to_message
+                and message.reply_to_message.from_user.id == user_id
         ):
             return warn(
                 message.reply_to_message.from_user,
-                chat,
+                update,
                 reason,
                 message.reply_to_message,
                 warner,
             )
         else:
-            return warn(chat.get_member(user_id).user, chat, reason, message, warner)
+            return warn(chat.get_member(user_id).user, update, reason, message, warner)
     else:
         message.reply_text("That looks like an invalid User ID to me.")
     return ""
@@ -235,7 +241,8 @@ def reset_warns(update: Update, context: CallbackContext) -> str:
             f"<b>{html.escape(chat.title)}:</b>\n"
             f"#RESETWARNS\n"
             f"<b>Admin:</b> {mention_html(user.id, user.first_name)}\n"
-            f"<b>User:</b> {mention_html(warned.id, warned.first_name)}"
+            f"<b>User:</b> {mention_html(warned.id, warned.first_name)}\n"
+            f"<b>User ID:</b> <code>{warned.id}</code>"
         )
     else:
         message.reply_text("No user has been designated!")
@@ -362,7 +369,7 @@ def list_warn_filters(update: Update, context: CallbackContext):
 
 
 @loggable
-def reply_filter(update: Update, context: CallbackContext) -> str:
+def reply_filter(update: Update, context: CallbackContext) -> Optional[str]:
     chat: Optional[Chat] = update.effective_chat
     message: Optional[Message] = update.effective_message
     user: Optional[User] = update.effective_user
@@ -385,7 +392,7 @@ def reply_filter(update: Update, context: CallbackContext) -> str:
         if re.search(pattern, to_match, flags=re.IGNORECASE):
             user: Optional[User] = update.effective_user
             warn_filter = sql.get_warn_filter(chat.id, keyword)
-            return warn(user, chat, warn_filter.reply, message)
+            return warn(user, update, warn_filter.reply, message)
     return ""
 
 
@@ -492,8 +499,10 @@ def __chat_settings__(chat_id, user_id):
 
 from tg_bot.modules.language import gs
 
+
 def get_help(chat):
     return gs(chat, "warns_help")
+
 
 __mod_name__ = "Warnings"
 

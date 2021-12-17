@@ -1,4 +1,5 @@
 import html
+from typing import Optional
 
 from telegram import Update, ParseMode
 from telegram.error import BadRequest
@@ -28,19 +29,40 @@ from tg_bot.modules.helper_funcs.decorators import kigcmd
 
 from ..modules.helper_funcs.anonymous import user_admin, AdminPerms
 
+
 @kigcmd(command='ban', pass_args=True)
 @connection_status
 @bot_admin
 @can_restrict
 @user_admin(AdminPerms.CAN_RESTRICT_MEMBERS)
 @loggable
-def ban(update, context):  # sourcery no-metrics
+def ban(update: Update, context: CallbackContext) -> Optional[str]:  # sourcery no-metrics
     chat = update.effective_chat  # type: Optional[Chat]
     user = update.effective_user  # type: Optional[User]
     message = update.effective_message  # type: Optional[Message]
     args = context.args
+    bot = context.bot
     log_message = ""
     reason = ""
+    if message.reply_to_message and message.reply_to_message.sender_chat:
+        r = bot.ban_chat_sender_chat(chat_id=chat.id, sender_chat_id=message.reply_to_message.sender_chat.id)
+        if r:
+            message.reply_text("Channel {} was banned successfully from {}".format(
+                html.escape(message.reply_to_message.sender_chat.title),
+                html.escape(chat.title)
+            ),
+                parse_mode="html"
+            )
+            return (
+                f"<b>{html.escape(chat.title)}:</b>\n"
+                f"#BANNED\n"
+                f"<b>Admin:</b> {mention_html(user.id, user.first_name)}\n"
+                f"<b>Channel:</b> {html.escape(message.reply_to_message.sender_chat.title)} ({message.reply_to_message.sender_chat.id})"
+            )
+        else:
+            message.reply_text("Failed to ban channel")
+        return
+
     user_id, reason = extract_user_and_text(message, args)
 
     if not user_id:
@@ -59,7 +81,7 @@ def ban(update, context):  # sourcery no-metrics
         message.reply_text("Oh yeah, ban myself, noob!")
         return log_message
 
-    if is_user_ban_protected(chat, user_id, member) and user not in DEV_USERS:
+    if is_user_ban_protected(update, user_id, member) and user not in DEV_USERS:
         if user_id == OWNER_ID:
             message.reply_text("I'd never ban my owner.")
         elif user_id in DEV_USERS:
@@ -85,12 +107,13 @@ def ban(update, context):  # sourcery no-metrics
         log += "\n<b>Reason:</b> {}".format(reason)
 
     try:
-        chat.kick_member(user_id)
+        chat.ban_member(user_id)
         # context.bot.send_sticker(chat.id, BAN_STICKER)  # banhammer marie sticker
         context.bot.sendMessage(
             chat.id,
             "{} was banned by {} in <b>{}</b>\n<b>Reason</b>: <code>{}</code>".format(
-                mention_html(member.user.id, member.user.first_name), mention_html(user.id, user.first_name), message.chat.title, reason
+                mention_html(member.user.id, member.user.first_name), mention_html(user.id, user.first_name),
+                message.chat.title, reason
             ),
             parse_mode=ParseMode.HTML,
         )
@@ -128,6 +151,7 @@ def temp_ban(update: Update, context: CallbackContext) -> str:
     log_message = ""
     reason = ""
     bot, args = context.bot, context.args
+
     user_id, reason = extract_user_and_text(message, args)
 
     if not user_id:
@@ -145,7 +169,7 @@ def temp_ban(update: Update, context: CallbackContext) -> str:
         message.reply_text("I'm not gonna BAN myself, are you crazy?")
         return log_message
 
-    if is_user_ban_protected(chat, user_id, member):
+    if is_user_ban_protected(update, user_id, member):
         message.reply_text("I don't feel like it.")
         return log_message
 
@@ -173,7 +197,7 @@ def temp_ban(update: Update, context: CallbackContext) -> str:
         log += "\n<b>Reason:</b> {}".format(reason)
 
     try:
-        chat.kick_member(user_id, until_date=bantime)
+        chat.ban_member(user_id, until_date=bantime)
         # bot.send_sticker(chat.id, BAN_STICKER)  # banhammer marie sticker
         bot.sendMessage(
             chat.id,
@@ -232,7 +256,7 @@ def kick(update: Update, context: CallbackContext) -> str:
         message.reply_text("Yeahhh I'm not gonna do that.")
         return log_message
 
-    if is_user_ban_protected(chat, user_id):
+    if is_user_ban_protected(update, user_id):
         message.reply_text("I really wish I could kick this user....")
         return log_message
 
@@ -266,7 +290,7 @@ def kick(update: Update, context: CallbackContext) -> str:
 @can_restrict
 def kickme(update: Update, context: CallbackContext):
     user_id = update.effective_message.from_user.id
-    if is_user_admin(update.effective_chat, user_id):
+    if is_user_admin(update, user_id):
         update.effective_message.reply_text("I wish I could... but you're an admin.")
         return
 
@@ -283,14 +307,31 @@ def kickme(update: Update, context: CallbackContext):
 @can_restrict
 @user_admin(AdminPerms.CAN_RESTRICT_MEMBERS)
 @loggable
-def unban(update: Update, context: CallbackContext) -> str:
+def unban(update: Update, context: CallbackContext) -> Optional[str]:
     message = update.effective_message
     user = update.effective_user
     chat = update.effective_chat
     log_message = ""
     bot, args = context.bot, context.args
+    if message.reply_to_message and message.reply_to_message.sender_chat:
+        r = bot.unban_chat_sender_chat(chat_id=chat.id, sender_chat_id=message.reply_to_message.sender_chat.id)
+        if r:
+            message.reply_text("Channel {} was unbanned successfully from {}".format(
+                html.escape(message.reply_to_message.sender_chat.title),
+                html.escape(chat.title)
+            ),
+                parse_mode="html"
+            )
+            return (
+                f"<b>{html.escape(chat.title)}:</b>\n"
+                f"#UNBANNED\n"
+                f"<b>Admin:</b> {mention_html(user.id, user.first_name)}\n"
+                f"<b>Channel:</b> {html.escape(message.reply_to_message.sender_chat.title)} ({message.reply_to_message.sender_chat.id})"
+            )
+        else:
+            message.reply_text("Failed to unban channel")
+        return
     user_id, reason = extract_user_and_text(message, args)
-
     if not user_id:
         message.reply_text("I doubt that's a user.")
         return log_message
@@ -312,12 +353,13 @@ def unban(update: Update, context: CallbackContext) -> str:
 
     chat.unban_member(user_id)
     bot.sendMessage(
-            chat.id,
-            "{} was unbanned by {} in <b>{}</b>\n<b>Reason</b>: <code>{}</code>".format(
-                mention_html(member.user.id, member.user.first_name), mention_html(user.id, user.first_name), message.chat.title, reason
-            ),
-            parse_mode=ParseMode.HTML,
-        )
+        chat.id,
+        "{} was unbanned by {} in <b>{}</b>\n<b>Reason</b>: <code>{}</code>".format(
+            mention_html(member.user.id, member.user.first_name), mention_html(user.id, user.first_name),
+            message.chat.title, reason
+        ),
+        parse_mode=ParseMode.HTML,
+    )
 
     log = (
         f"<b>{html.escape(chat.title)}:</b>\n"
@@ -336,7 +378,7 @@ def unban(update: Update, context: CallbackContext) -> str:
 @bot_admin
 @can_restrict
 @gloggable
-def selfunban(context: CallbackContext, update: Update) -> str:
+def selfunban(context: CallbackContext, update: Update) -> Optional[str]:
     message = update.effective_message
     user = update.effective_user
     bot, args = context.bot, context.args
@@ -375,11 +417,12 @@ def selfunban(context: CallbackContext, update: Update) -> str:
 
     return log
 
+
 from tg_bot.modules.language import gs
+
 
 def get_help(chat):
     return gs(chat, "bans_help")
-
 
 
 __mod_name__ = "Bans"
